@@ -11,7 +11,9 @@ const CytoscapeGraph = ({
     isPaused,
     onSimulationEnd,
     source,
-    destination
+    destination,
+    preference,
+    layers
 }) => {
   const cyRef = useRef(null);
   const containerRef = useRef(null);
@@ -62,21 +64,32 @@ const CytoscapeGraph = ({
             'curve-style': 'bezier',
             'opacity': 0.4,
             'target-arrow-shape': 'none',
-            'transition-property': 'line-color, width, opacity',
+            'label': 'data(label)',
+            'color': '#64748b',
+            'font-size': '8px',
+            'font-weight': 'bold',
+            'text-background-color': '#020617',
+            'text-background-opacity': 0.8,
+            'text-background-padding': '2px',
+            'text-background-shape': 'roundrectangle',
+            'edge-text-rotation': 'autorotate',
+            'text-margin-y': -10,
+            'min-zoomed-font-size': 5,
+            'transition-property': 'line-color, width, opacity, color, font-size',
             'transition-duration': '500ms'
           }
         },
         {
             selector: '.traffic-low',
-            style: { 'line-color': '#22c55e', 'opacity': 0.6 }
+            style: { 'line-color': '#22c55e', 'opacity': 0.5 }
         },
         {
             selector: '.traffic-medium',
-            style: { 'line-color': '#eab308', 'opacity': 0.8, 'width': 3 }
+            style: { 'line-color': '#eab308', 'opacity': 0.7, 'width': 3 }
         },
         {
             selector: '.traffic-high',
-            style: { 'line-color': '#f97316', 'opacity': 0.9, 'width': 4 }
+            style: { 'line-color': '#f97316', 'opacity': 0.8, 'width': 4 }
         },
         {
             selector: '.traffic-severe',
@@ -139,6 +152,9 @@ const CytoscapeGraph = ({
             'shadow-blur': 15,
             'shadow-color': '#10b981',
             'shadow-opacity': 0.8,
+            'color': '#10b981',
+            'font-size': '10px',
+            'text-background-opacity': 1
           }
         },
         {
@@ -148,7 +164,8 @@ const CytoscapeGraph = ({
                 'width': 6,
                 'opacity': 1,
                 'line-style': 'dashed',
-                'z-index': 150
+                'z-index': 150,
+                'color': '#fbbf24'
             }
         },
         {
@@ -194,19 +211,22 @@ const CytoscapeGraph = ({
         else if (e.traffic > 0.6) trafficClass = 'traffic-high';
         else if (e.traffic > 0.3) trafficClass = 'traffic-medium';
 
+        let label = '';
+        if (layers?.showDistances) label += `${e.distance}km `;
+        if (layers?.showTraffic) label += `(${Math.round(e.traffic * 100)}%) `;
+
         return { 
             data: { 
                 id: getEdgeId(e.source, e.target), 
                 ...e,
-                speed: Math.round(80 * (1 - (e.traffic * 0.7))),
-                delay: Math.round(e.distance * e.traffic * 0.5)
+                label: label.trim()
             },
             classes: trafficClass
         };
     });
 
     return [...nodes, ...edges];
-  }, [elements]);
+  }, [elements, layers]);
 
   useEffect(() => {
       if (animationSteps) {
@@ -336,7 +356,6 @@ const CytoscapeGraph = ({
             style={{ 
                 left: mousePos.x + 20, 
                 top: mousePos.y + 20,
-                // Ensure tooltip stays inside container bounds
                 maxWidth: '250px'
             }}
           >
@@ -351,24 +370,16 @@ const CytoscapeGraph = ({
                         <span>{hoverData.data.source} → {hoverData.data.target}</span>
                         <span className="text-slate-500">{hoverData.data.distance}KM</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 mt-1">
-                        <div className="flex flex-col">
-                            <span className="text-[8px] text-slate-500">Traffic</span>
+                    <div className="grid grid-cols-1 gap-2 mt-1">
+                        <div className="flex justify-between">
+                            <span className="text-[8px] text-slate-500 uppercase">Traffic Density</span>
                             <span className={hoverData.data.traffic > 0.6 ? 'text-red-400' : hoverData.data.traffic > 0.3 ? 'text-yellow-400' : 'text-emerald-400'}>
-                                {Math.round(hoverData.data.traffic * 100)}% Congested
+                                {Math.round(hoverData.data.traffic * 100)}%
                             </span>
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-[8px] text-slate-500">Speed</span>
-                            <span className="text-white">{hoverData.data.speed} KM/H</span>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[8px] text-slate-500">Delay</span>
-                            <span className="text-orange-400">+{hoverData.data.delay} MINS</span>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[8px] text-slate-500">Density</span>
-                            <span className="text-white">{hoverData.data.traffic > 0.7 ? 'SEVERE' : hoverData.data.traffic > 0.4 ? 'HEAVY' : 'STABLE'}</span>
+                        <div className="flex justify-between">
+                            <span className="text-[8px] text-slate-500 uppercase">Route Status</span>
+                            <span className="text-white">{hoverData.data.traffic > 0.7 ? 'SEVERE CONGESTION' : hoverData.data.traffic > 0.4 ? 'HEAVY TRAFFIC' : 'CLEAR PATH'}</span>
                         </div>
                     </div>
                   </>

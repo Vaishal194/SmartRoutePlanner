@@ -5,7 +5,7 @@ import ControlPanel from './components/ControlPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import RouteHistory from './components/RouteHistory';
 import AlgorithmComparison from './components/AlgorithmComparison';
-import { RefreshCw, Map, Zap, Play, RotateCcw, AlertTriangle, Info, Timer } from 'lucide-react';
+import { RefreshCw, Map, Zap, Play, RotateCcw, AlertTriangle, Info, Timer, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
@@ -21,6 +21,10 @@ function App() {
   const [isPaused, setIsPaused] = useState(false);
   const [notification, setNotification] = useState(null);
   const [activeTab, setActiveTab] = useState('simulation'); 
+  
+  // Edge Visualization Toggles
+  const [showDistances, setShowDistances] = useState(true);
+  const [showTraffic, setShowTraffic] = useState(true);
 
   useEffect(() => {
     fetchGraph();
@@ -131,6 +135,18 @@ function App() {
                 />
             )}
             
+            {/* Visual Toggles */}
+            <div className="px-8 pb-4">
+                <div className="flex items-center gap-2 mb-4 text-slate-500">
+                    <Eye className="w-3 h-3" />
+                    <span className="text-[9px] font-black uppercase tracking-widest">Visual Layers</span>
+                </div>
+                <div className="flex gap-2">
+                    <ToggleButton active={showDistances} onClick={() => setShowDistances(!showDistances)} label="KM" />
+                    <ToggleButton active={showTraffic} onClick={() => setShowTraffic(!showTraffic)} label="Traffic" />
+                </div>
+            </div>
+
             {/* Algorithm Legend */}
             <div className="px-8 pb-8 pt-4">
                 <div className="flex items-center gap-2 mb-4 text-slate-500">
@@ -175,6 +191,8 @@ function App() {
                     onSimulationEnd={() => setIsRunning(false)}
                     source={source}
                     destination={destination}
+                    preference={preference}
+                    layers={{ showDistances, showTraffic }}
                 />
             ) : (
                 <div className="w-full h-full flex items-center justify-center bg-[#020617]">
@@ -223,6 +241,15 @@ function App() {
     </div>
   );
 }
+
+const ToggleButton = ({ active, onClick, label }) => (
+    <button 
+        onClick={onClick}
+        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${active ? 'bg-cyan-500 border-cyan-400 text-slate-950 shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:border-slate-700'}`}
+    >
+        {label}
+    </button>
+);
 
 const LegendItem = ({ color, title, desc }) => (
     <div className="flex gap-3 items-center group cursor-help">

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Activity, Timer, Zap, MapPin, BrainCircuit, BarChart3, AlertTriangle, Gauge, Clock, ShieldCheck } from 'lucide-react';
+import { Activity, Timer, Zap, MapPin, BrainCircuit, BarChart3, AlertTriangle, Gauge, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AnalyticsPanel = ({ results, currentAlgo, isRunning }) => {
@@ -15,16 +15,12 @@ const AnalyticsPanel = ({ results, currentAlgo, isRunning }) => {
   const trafficMetrics = useMemo(() => {
       if (!data.cost) return null;
       const baseDistance = data.cost;
-      const avgTraffic = 0.4 + (Math.random() * 0.4); // Simulated avg traffic for route
+      const avgTraffic = 0.4 + (Math.random() * 0.4); 
       const effectiveSpeed = Math.round(80 * (1 - (avgTraffic * 0.6)));
-      const etaHours = baseDistance / effectiveSpeed;
-      const delayMins = Math.round((etaHours * 0.4) * 60);
       
       return {
           avgTraffic: Math.round(avgTraffic * 100),
           effectiveSpeed,
-          eta: `${Math.floor(etaHours)}h ${Math.round((etaHours % 1) * 60)}m`,
-          delayMins
       };
   }, [data.cost]);
 
@@ -75,7 +71,7 @@ const AnalyticsPanel = ({ results, currentAlgo, isRunning }) => {
                   COST = DISTANCE + TRAFFIC_PENALTY
               </div>
               <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
-                  Effective Speed: <span className="text-emerald-400">80km/h × (1 - Congestion)</span>
+                  Efficiency Index: <span className="text-emerald-400">Optimized for {currentAlgo === 'greedy' ? 'Speed' : 'Accuracy'}</span>
               </div>
           </div>
       </section>
@@ -87,24 +83,22 @@ const AnalyticsPanel = ({ results, currentAlgo, isRunning }) => {
             value={data.cost ? Math.round(data.cost) : '---'} unit="km" 
             color="text-blue-500" 
         />
+        <Metric 
+            icon={Zap} label="Nodes Explored" 
+            value={data.nodes_explored || '---'} unit="cities" 
+            color="text-yellow-500" 
+        />
+        <Metric 
+            icon={Timer} label="Compute Latency" 
+            value={data.execution_time ? data.execution_time.toFixed(2) : '---'} unit="ms" 
+            color="text-purple-500" 
+        />
         {trafficMetrics && (
-            <>
-                <Metric 
-                    icon={Clock} label="Estimated Arrival" 
-                    value={trafficMetrics.eta} unit="" 
-                    color="text-emerald-500" 
-                />
-                <Metric 
-                    icon={Gauge} label="Avg. Effective Speed" 
-                    value={trafficMetrics.effectiveSpeed} unit="km/h" 
-                    color="text-orange-500" 
-                />
-                <Metric 
-                    icon={AlertTriangle} label="Traffic Delay" 
-                    value={trafficMetrics.delayMins} unit="mins" 
-                    color="text-red-500" 
-                />
-            </>
+            <Metric 
+                icon={Gauge} label="Avg. Density" 
+                value={trafficMetrics.avgTraffic} unit="%" 
+                color="text-orange-500" 
+            />
         )}
       </section>
 
@@ -120,12 +114,6 @@ const AnalyticsPanel = ({ results, currentAlgo, isRunning }) => {
                 {currentAlgo === 'dijkstra' && "Dijkstra's algorithm exhausted all possible route permutations, selecting the path with the lowest cumulative cost (Distance + Congestion Delay)."}
                 {currentAlgo === 'greedy' && "Greedy Search prioritized the absolute closest node to the target coordinate, potentially ignoring severe congestion on the primary highway."}
             </p>
-            {trafficMetrics?.avgTraffic > 60 && (
-                <div className="p-2 bg-red-500/10 rounded-lg text-[9px] font-bold text-red-400 uppercase tracking-tight flex items-start gap-2">
-                    <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
-                    <span>Severe congestion detected on direct path. Rerouting to low-density arterial roads.</span>
-                </div>
-            )}
             <div className="p-2 bg-emerald-500/10 rounded-lg text-[9px] font-bold text-emerald-400 uppercase tracking-tight flex items-start gap-2">
                 <ShieldCheck className="w-3 h-3 shrink-0 mt-0.5" />
                 <span>Optimized for {currentAlgo === 'astar' ? 'Maximum Efficiency' : 'Absolute Precision'}.</span>

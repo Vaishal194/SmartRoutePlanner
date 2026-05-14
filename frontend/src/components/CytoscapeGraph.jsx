@@ -14,6 +14,7 @@ const CytoscapeGraph = ({
     destination
 }) => {
   const cyRef = useRef(null);
+  const containerRef = useRef(null);
   const [hoverData, setHoverData] = useState(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const timerRef = useRef(null);
@@ -56,20 +57,43 @@ const CytoscapeGraph = ({
         {
           selector: 'edge',
           style: {
-            'width': 1.5,
-            'line-color': '#1e293b',
+            'width': 2,
+            'line-color': '#334155',
             'curve-style': 'bezier',
-            'opacity': 0.2,
+            'opacity': 0.4,
             'target-arrow-shape': 'none',
             'transition-property': 'line-color, width, opacity',
-            'transition-duration': `${Math.min(300, stepDuration * 0.8)}ms`,
+            'transition-duration': '500ms'
           }
+        },
+        {
+            selector: '.traffic-low',
+            style: { 'line-color': '#22c55e', 'opacity': 0.6 }
+        },
+        {
+            selector: '.traffic-medium',
+            style: { 'line-color': '#eab308', 'opacity': 0.8, 'width': 3 }
+        },
+        {
+            selector: '.traffic-high',
+            style: { 'line-color': '#f97316', 'opacity': 0.9, 'width': 4 }
+        },
+        {
+            selector: '.traffic-severe',
+            style: { 
+                'line-color': '#ef4444', 
+                'opacity': 1, 
+                'width': 6,
+                'shadow-blur': 10,
+                'shadow-color': '#ef4444',
+                'shadow-opacity': 0.8
+            }
         },
         {
           selector: '.exploring',
           style: {
-            'background-color': '#eab308',
-            'border-color': '#fbbf24',
+            'background-color': '#fbbf24',
+            'border-color': '#f59e0b',
             'border-width': 4,
             'width': 20,
             'height': 20,
@@ -82,7 +106,7 @@ const CytoscapeGraph = ({
           style: {
             'background-color': '#3b82f6',
             'border-color': '#60a5fa',
-            'opacity': 0.5,
+            'opacity': 0.6,
             'width': 14,
             'height': 14,
           }
@@ -106,7 +130,7 @@ const CytoscapeGraph = ({
           selector: '.optimal-edge',
           style: {
             'line-color': '#10b981',
-            'width': 8,
+            'width': 10,
             'opacity': 1,
             'z-index': 250,
             'line-style': 'solid',
@@ -120,8 +144,8 @@ const CytoscapeGraph = ({
         {
             selector: '.exploring-edge',
             style: {
-                'line-color': '#eab308',
-                'width': 4,
+                'line-color': '#fbbf24',
+                'width': 6,
                 'opacity': 1,
                 'line-style': 'dashed',
                 'z-index': 150
@@ -164,22 +188,33 @@ const CytoscapeGraph = ({
       }
     }));
 
-    const edges = (elements.edges || []).map((e) => ({ 
-      data: { id: getEdgeId(e.source, e.target), ...e }
-    }));
+    const edges = (elements.edges || []).map((e) => {
+        let trafficClass = 'traffic-low';
+        if (e.traffic > 0.8) trafficClass = 'traffic-severe';
+        else if (e.traffic > 0.6) trafficClass = 'traffic-high';
+        else if (e.traffic > 0.3) trafficClass = 'traffic-medium';
+
+        return { 
+            data: { 
+                id: getEdgeId(e.source, e.target), 
+                ...e,
+                speed: Math.round(80 * (1 - (e.traffic * 0.7))),
+                delay: Math.round(e.distance * e.traffic * 0.5)
+            },
+            classes: trafficClass
+        };
+    });
 
     return [...nodes, ...edges];
   }, [elements]);
 
-  // Reset internal state and visuals when animationSteps changes (new simulation)
   useEffect(() => {
       if (animationSteps) {
-          console.log("Resetting for new simulation steps");
           clearInterval(timerRef.current);
           clearInterval(pathTimerRef.current);
           stepIdxRef.current = 0;
           if (cyRef.current) {
-              cyRef.current.elements().removeClass('optimal-node optimal-edge exploring-edge exploring visited particle-flow');
+              cyRef.current.elements('.optimal-node, .optimal-edge, .exploring-edge, .exploring, .visited, .particle-flow').removeClass('optimal-node optimal-edge exploring-edge exploring visited particle-flow');
           }
       }
   }, [animationSteps]);
@@ -234,24 +269,20 @@ const CytoscapeGraph = ({
     clearInterval(pathTimerRef.current);
 
     try {
-        const startReveal = () => {
-            let i = 0;
-            pathTimerRef.current = setInterval(() => {
-                if (i >= path.length) { 
-                    clearInterval(pathTimerRef.current);
-                    cy.elements('.optimal-edge').addClass('particle-flow');
-                    onSimulationEnd && onSimulationEnd();
-                    return; 
-                }
-                cy.nodes(`#${path[i]}`).addClass('optimal-node');
-                if (i > 0) {
-                    cy.edges(`#${getEdgeId(path[i-1], path[i])}`).addClass('optimal-edge');
-                }
-                i++;
-            }, stepDuration / 1.5);
-        };
-
-        startReveal();
+        let i = 0;
+        pathTimerRef.current = setInterval(() => {
+            if (i >= path.length) { 
+                clearInterval(pathTimerRef.current);
+                cy.elements('.optimal-edge').addClass('particle-flow');
+                onSimulationEnd && onSimulationEnd();
+                return; 
+            }
+            cy.nodes(`#${path[i]}`).addClass('optimal-node');
+            if (i > 0) {
+                cy.edges(`#${getEdgeId(path[i-1], path[i])}`).addClass('optimal-edge');
+            }
+            i++;
+        }, stepDuration / 1.5);
     } catch (e) {
         onSimulationEnd && onSimulationEnd();
     }
@@ -264,8 +295,22 @@ const CytoscapeGraph = ({
       }
   }, [processedElements]);
 
+  const handleMouseMove = (e) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      setMousePos({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+      });
+  };
+
   return (
-    <div className="w-full h-full relative" onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY })}>
+    <div 
+        ref={containerRef}
+        className="w-full h-full relative overflow-hidden" 
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHoverData(null)}
+    >
       <CytoscapeComponent
         elements={processedElements}
         style={{ width: '100%', height: '100%' }}
@@ -275,18 +320,59 @@ const CytoscapeGraph = ({
           cyRef.current = cy;
           cy.on('tap', 'node', (e) => onNodeClick(e.target.id()));
           cy.on('mouseover', 'node', (e) => setHoverData({ type: 'node', data: e.target.data() }));
-          cy.on('mouseout', 'node', () => setHoverData(null));
+          cy.on('mouseover', 'edge', (e) => setHoverData({ type: 'edge', data: e.target.data() }));
+          cy.on('mouseout', 'node edge', () => setHoverData(null));
         }}
         className="bg-[#020617]"
       />
       {isRunning && (
           <div className="absolute top-24 left-6 bg-slate-900/60 backdrop-blur-md border border-white/5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-cyan-400 animate-pulse">
-              Navigating Network...
+              Engine Optimization In Progress...
           </div>
       )}
       {hoverData && (
-          <div className="fixed z-50 p-4 bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl text-white text-[10px] font-black uppercase tracking-widest pointer-events-none shadow-2xl" style={{ left: mousePos.x + 20, top: mousePos.y + 20 }}>
-              {hoverData.data.id}
+          <div 
+            className="absolute z-50 p-4 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl text-white text-[10px] font-black uppercase tracking-widest pointer-events-none shadow-2xl flex flex-col gap-2 min-w-[200px]" 
+            style={{ 
+                left: mousePos.x + 20, 
+                top: mousePos.y + 20,
+                // Ensure tooltip stays inside container bounds
+                maxWidth: '250px'
+            }}
+          >
+              {hoverData.type === 'node' ? (
+                  <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
+                      <span>{hoverData.data.id} Junction</span>
+                  </div>
+              ) : (
+                  <>
+                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span>{hoverData.data.source} → {hoverData.data.target}</span>
+                        <span className="text-slate-500">{hoverData.data.distance}KM</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mt-1">
+                        <div className="flex flex-col">
+                            <span className="text-[8px] text-slate-500">Traffic</span>
+                            <span className={hoverData.data.traffic > 0.6 ? 'text-red-400' : hoverData.data.traffic > 0.3 ? 'text-yellow-400' : 'text-emerald-400'}>
+                                {Math.round(hoverData.data.traffic * 100)}% Congested
+                            </span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] text-slate-500">Speed</span>
+                            <span className="text-white">{hoverData.data.speed} KM/H</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] text-slate-500">Delay</span>
+                            <span className="text-orange-400">+{hoverData.data.delay} MINS</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] text-slate-500">Density</span>
+                            <span className="text-white">{hoverData.data.traffic > 0.7 ? 'SEVERE' : hoverData.data.traffic > 0.4 ? 'HEAVY' : 'STABLE'}</span>
+                        </div>
+                    </div>
+                  </>
+              )}
           </div>
       )}
     </div>

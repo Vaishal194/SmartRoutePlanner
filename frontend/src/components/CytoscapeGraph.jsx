@@ -18,6 +18,9 @@ const CytoscapeGraph = ({
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const timerRef = useRef(null);
   const stepIdxRef = useRef(0);
+  const pathTimerRef = useRef(null);
+
+  const stepDuration = 1000 / animationSpeed;
 
   const layout = {
     name: 'preset',
@@ -42,7 +45,7 @@ const CytoscapeGraph = ({
             'border-width': 2,
             'border-color': '#334155',
             'transition-property': 'background-color, border-color, width, height, border-width, color',
-            'transition-duration': '0.3s',
+            'transition-duration': `${Math.min(300, stepDuration * 0.8)}ms`,
           }
         },
         {
@@ -55,7 +58,7 @@ const CytoscapeGraph = ({
             'curve-style': 'bezier',
             'opacity': 0.3,
             'transition-property': 'line-color, width, opacity',
-            'transition-duration': '0.3s'
+            'transition-duration': `${Math.min(300, stepDuration * 0.8)}ms`,
           }
         },
         {
@@ -98,6 +101,7 @@ const CytoscapeGraph = ({
             'width': 8,
             'opacity': 1,
             'z-index': 150,
+            'transition-duration': '100ms'
           }
         },
         {
@@ -174,13 +178,15 @@ const CytoscapeGraph = ({
     return [...nodes, ...edges];
   }, [elements]);
 
+  // Main Traversal Animation
   useEffect(() => {
     if (!isRunning || !animationSteps || isPaused) {
         clearInterval(timerRef.current);
         return;
     }
 
-    timerRef.current = setInterval(() => {
+    // Immediately trigger first step or continue
+    const runStep = () => {
         if (stepIdxRef.current >= animationSteps.length) {
             clearInterval(timerRef.current);
             if (finalPath) animatePathFlow(finalPath);
@@ -208,25 +214,30 @@ const CytoscapeGraph = ({
         } catch (e) {}
 
         stepIdxRef.current++;
-    }, 1000 / animationSpeed);
+    };
+
+    timerRef.current = setInterval(runStep, stepDuration);
 
     return () => clearInterval(timerRef.current);
-  }, [isRunning, animationSteps, animationSpeed, isPaused, finalPath]);
+  }, [isRunning, animationSteps, animationSpeed, isPaused, finalPath, stepDuration]);
 
+  // Path Highlighting Animation
   const animatePathFlow = (path) => {
     const cy = cyRef.current;
     if (!cy) return;
+    clearInterval(pathTimerRef.current);
+
     try {
         cy.elements().removeClass('path path-edge active-edge exploring');
         let i = 0;
-        const pathTimer = setInterval(() => {
-            if (i >= path.length) { clearInterval(pathTimer); return; }
+        pathTimerRef.current = setInterval(() => {
+            if (i >= path.length) { clearInterval(pathTimerRef.current); return; }
             cy.nodes(`#${path[i]}`).addClass('path');
             if (i > 0) {
                 cy.edges(`[source="${path[i-1]}"][target="${path[i]}"],[source="${path[i]}"][target="${path[i-1]}"]`).addClass('path-edge');
             }
             i++;
-        }, 150);
+        }, stepDuration / 2); // Path highlighting is usually faster than exploration
     } catch (e) {}
   };
 
@@ -236,6 +247,18 @@ const CytoscapeGraph = ({
           cyRef.current.fit();
       }
   }, [processedElements]);
+
+  // Clean up timers on reset
+  useEffect(() => {
+      if (!isRunning) {
+          clearInterval(timerRef.current);
+          clearInterval(pathTimerRef.current);
+          stepIdxRef.current = 0;
+          if (cyRef.current) {
+              cyRef.current.elements().removeClass('path path-edge active-edge exploring visited');
+          }
+      }
+  }, [isRunning]);
 
   return (
     <div className="w-full h-full relative" onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY })}>
@@ -252,6 +275,14 @@ const CytoscapeGraph = ({
         }}
         className="bg-[#020617]"
       />
+      
+      {/* Speed Indicator */}
+      {isRunning && (
+          <div className="absolute top-24 left-6 bg-slate-900/60 backdrop-blur-md border border-white/5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-cyan-400 animate-pulse">
+              Engine Speed: {animationSpeed}x
+          </div>
+      )}
+
       {hoverData && (
           <div className="fixed z-50 p-4 bg-slate-900 border border-white/10 rounded-2xl text-white text-xs pointer-events-none" style={{ left: mousePos.x + 20, top: mousePos.y + 20 }}>
               {hoverData.data.id}

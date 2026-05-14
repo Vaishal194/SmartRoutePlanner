@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getGraph, getTraffic, findRoute, findRouteRace } from './services/api';
 import CytoscapeGraph from './components/CytoscapeGraph';
 import ControlPanel from './components/ControlPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import RouteHistory from './components/RouteHistory';
 import AlgorithmComparison from './components/AlgorithmComparison';
-import { RefreshCw, Map, Zap, Play, RotateCcw, AlertTriangle, Info } from 'lucide-react';
+import { RefreshCw, Map, Zap, Play, RotateCcw, AlertTriangle, Info, Timer } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
@@ -63,7 +63,6 @@ function App() {
       if (activeTab === 'race') {
           const response = await findRouteRace({ source, destination, preference });
           setRaceResults(response.data);
-          // Animate the best one (A* by default for race visualization)
           setResults(response.data.astar);
       } else {
           const response = await findRoute(algorithm, { source, destination, preference });
@@ -82,6 +81,11 @@ function App() {
     setSource('');
     setDestination('');
   };
+
+  const estDuration = useMemo(() => {
+      if (!results?.steps) return 0;
+      return (results.steps.length * (1000 / animationSpeed) / 1000).toFixed(1);
+  }, [results, animationSpeed]);
 
   return (
     <div className="flex w-screen h-screen bg-[#020617] text-slate-200 overflow-hidden font-sans">
@@ -195,8 +199,10 @@ function App() {
                     <div className="text-xl font-black text-white italic tracking-tighter">{graph?.nodes?.length || 0}</div>
                 </div>
                 <div className="space-y-1">
-                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Edge Connections</div>
-                    <div className="text-xl font-black text-white italic tracking-tighter">{graph?.edges?.length || 0}</div>
+                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">EST. Duration</div>
+                    <div className="text-xl font-black text-cyan-400 italic tracking-tighter flex items-center gap-2">
+                        <Timer className="w-4 h-4" /> {isRunning ? estDuration : '0.0'}s
+                    </div>
                 </div>
                 <div className="space-y-1">
                     <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Network Load</div>

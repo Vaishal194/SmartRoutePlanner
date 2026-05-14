@@ -28,13 +28,18 @@ const CytoscapeGraph = ({
     padding: 60,
   };
 
+  const getEdgeId = (s, t) => {
+    const parts = [s, t].sort();
+    return `${parts[0]}_${parts[1]}`;
+  };
+
   const getStylesheet = () => {
-    const base = [
+    return [
         {
           selector: 'node',
           style: {
             'label': 'data(id)',
-            'background-color': '#0f172a',
+            'background-color': '#1e293b',
             'color': '#94a3b8',
             'font-size': '10px',
             'font-weight': 'bold',
@@ -42,21 +47,20 @@ const CytoscapeGraph = ({
             'text-margin-y': 5,
             'width': 12,
             'height': 12,
-            'border-width': 2,
+            'border-width': 1,
             'border-color': '#334155',
-            'transition-property': 'background-color, border-color, width, height, border-width, color',
+            'transition-property': 'background-color, border-color, width, height, border-width, color, box-shadow, opacity',
             'transition-duration': `${Math.min(300, stepDuration * 0.8)}ms`,
           }
         },
         {
           selector: 'edge',
           style: {
-            'width': 2,
+            'width': 1.5,
             'line-color': '#1e293b',
-            'target-arrow-shape': 'triangle',
-            'target-arrow-color': '#1e293b',
             'curve-style': 'bezier',
-            'opacity': 0.3,
+            'opacity': 0.2,
+            'target-arrow-shape': 'none',
             'transition-property': 'line-color, width, opacity',
             'transition-duration': `${Math.min(300, stepDuration * 0.8)}ms`,
           }
@@ -66,10 +70,11 @@ const CytoscapeGraph = ({
           style: {
             'background-color': '#eab308',
             'border-color': '#fbbf24',
-            'border-width': 6,
-            'width': 24,
-            'height': 24,
-            'z-index': 100
+            'border-width': 4,
+            'width': 20,
+            'height': 20,
+            'z-index': 100,
+            'opacity': 1
           }
         },
         {
@@ -77,71 +82,60 @@ const CytoscapeGraph = ({
           style: {
             'background-color': '#3b82f6',
             'border-color': '#60a5fa',
-            'opacity': 1,
-            'width': 16,
-            'height': 16,
+            'opacity': 0.5,
+            'width': 14,
+            'height': 14,
           }
         },
         {
-          selector: '.path',
+          selector: '.optimal-node',
           style: {
             'background-color': '#10b981',
             'border-color': '#34d399',
             'width': 24,
             'height': 24,
-            'z-index': 200,
+            'z-index': 300,
             'color': '#fff',
-            'font-size': '12px'
+            'font-size': '12px',
+            'border-width': 3,
+            'box-shadow': '0 0 20px #10b981',
+            'opacity': 1
           }
         },
         {
-          selector: '.path-edge',
+          selector: '.optimal-edge',
           style: {
             'line-color': '#10b981',
             'width': 8,
             'opacity': 1,
-            'z-index': 150,
-            'transition-duration': '100ms'
+            'z-index': 250,
+            'line-style': 'solid',
+            'target-arrow-color': '#10b981',
+            'target-arrow-shape': 'triangle',
+            'shadow-blur': 15,
+            'shadow-color': '#10b981',
+            'shadow-opacity': 0.8,
           }
         },
         {
-            selector: '.active-edge',
+            selector: '.exploring-edge',
             style: {
                 'line-color': '#eab308',
                 'width': 4,
                 'opacity': 1,
                 'line-style': 'dashed',
+                'z-index': 150
             }
+        },
+        {
+          selector: '.particle-flow',
+          style: {
+            'line-dash-pattern': [8, 12],
+            'line-dash-offset': 10,
+            'line-color': '#34d399'
+          }
         }
     ];
-
-    if (source) {
-        base.push({
-            selector: `node[id="${source}"]`,
-            style: {
-                'background-color': '#06b6d4',
-                'border-color': '#22d3ee',
-                'width': 20,
-                'height': 20,
-                'border-width': 4,
-            }
-        });
-    }
-
-    if (destination) {
-        base.push({
-            selector: `node[id="${destination}"]`,
-            style: {
-                'background-color': '#8b5cf6',
-                'border-color': '#a78bfa',
-                'width': 20,
-                'height': 20,
-                'border-width': 4,
-            }
-        });
-    }
-
-    return base;
   };
 
   const processedElements = useMemo(() => {
@@ -170,27 +164,40 @@ const CytoscapeGraph = ({
       }
     }));
 
-    const edges = (elements.edges || []).map((e, i) => ({ 
-      data: { id: `e${i}`, ...e },
-      classes: e.traffic > 0.7 ? 'high-traffic' : e.traffic > 0.4 ? 'medium-traffic' : ''
+    const edges = (elements.edges || []).map((e) => ({ 
+      data: { id: getEdgeId(e.source, e.target), ...e }
     }));
 
     return [...nodes, ...edges];
   }, [elements]);
 
-  // Main Traversal Animation
+  // Reset internal state and visuals when animationSteps changes (new simulation)
+  useEffect(() => {
+      if (animationSteps) {
+          console.log("Resetting for new simulation steps");
+          clearInterval(timerRef.current);
+          clearInterval(pathTimerRef.current);
+          stepIdxRef.current = 0;
+          if (cyRef.current) {
+              cyRef.current.elements().removeClass('optimal-node optimal-edge exploring-edge exploring visited particle-flow');
+          }
+      }
+  }, [animationSteps]);
+
   useEffect(() => {
     if (!isRunning || !animationSteps || isPaused) {
         clearInterval(timerRef.current);
         return;
     }
 
-    // Immediately trigger first step or continue
     const runStep = () => {
         if (stepIdxRef.current >= animationSteps.length) {
             clearInterval(timerRef.current);
-            if (finalPath) animatePathFlow(finalPath);
-            onSimulationEnd && onSimulationEnd();
+            if (finalPath && finalPath.length > 0) {
+                animatePathFlow(finalPath);
+            } else {
+                onSimulationEnd && onSimulationEnd();
+            }
             return;
         }
 
@@ -200,7 +207,7 @@ const CytoscapeGraph = ({
         
         try {
             cy.elements('.exploring').removeClass('exploring');
-            cy.elements('.active-edge').removeClass('active-edge');
+            cy.elements('.exploring-edge').removeClass('exploring-edge');
             
             const node = cy.nodes(`#${step.node}`);
             if (node.length > 0) {
@@ -209,7 +216,8 @@ const CytoscapeGraph = ({
             
             if (stepIdxRef.current > 0) {
                 const prevNode = animationSteps[stepIdxRef.current - 1].node;
-                cy.edges(`[source="${prevNode}"][target="${step.node}"],[source="${step.node}"][target="${prevNode}"]`).addClass('active-edge');
+                const edgeId = getEdgeId(prevNode, step.node);
+                cy.edges(`#${edgeId}`).addClass('exploring-edge');
             }
         } catch (e) {}
 
@@ -217,28 +225,36 @@ const CytoscapeGraph = ({
     };
 
     timerRef.current = setInterval(runStep, stepDuration);
-
     return () => clearInterval(timerRef.current);
   }, [isRunning, animationSteps, animationSpeed, isPaused, finalPath, stepDuration]);
 
-  // Path Highlighting Animation
   const animatePathFlow = (path) => {
     const cy = cyRef.current;
     if (!cy) return;
     clearInterval(pathTimerRef.current);
 
     try {
-        cy.elements().removeClass('path path-edge active-edge exploring');
-        let i = 0;
-        pathTimerRef.current = setInterval(() => {
-            if (i >= path.length) { clearInterval(pathTimerRef.current); return; }
-            cy.nodes(`#${path[i]}`).addClass('path');
-            if (i > 0) {
-                cy.edges(`[source="${path[i-1]}"][target="${path[i]}"],[source="${path[i]}"][target="${path[i-1]}"]`).addClass('path-edge');
-            }
-            i++;
-        }, stepDuration / 2); // Path highlighting is usually faster than exploration
-    } catch (e) {}
+        const startReveal = () => {
+            let i = 0;
+            pathTimerRef.current = setInterval(() => {
+                if (i >= path.length) { 
+                    clearInterval(pathTimerRef.current);
+                    cy.elements('.optimal-edge').addClass('particle-flow');
+                    onSimulationEnd && onSimulationEnd();
+                    return; 
+                }
+                cy.nodes(`#${path[i]}`).addClass('optimal-node');
+                if (i > 0) {
+                    cy.edges(`#${getEdgeId(path[i-1], path[i])}`).addClass('optimal-edge');
+                }
+                i++;
+            }, stepDuration / 1.5);
+        };
+
+        startReveal();
+    } catch (e) {
+        onSimulationEnd && onSimulationEnd();
+    }
   };
 
   useEffect(() => {
@@ -247,18 +263,6 @@ const CytoscapeGraph = ({
           cyRef.current.fit();
       }
   }, [processedElements]);
-
-  // Clean up timers on reset
-  useEffect(() => {
-      if (!isRunning) {
-          clearInterval(timerRef.current);
-          clearInterval(pathTimerRef.current);
-          stepIdxRef.current = 0;
-          if (cyRef.current) {
-              cyRef.current.elements().removeClass('path path-edge active-edge exploring visited');
-          }
-      }
-  }, [isRunning]);
 
   return (
     <div className="w-full h-full relative" onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY })}>
@@ -275,16 +279,13 @@ const CytoscapeGraph = ({
         }}
         className="bg-[#020617]"
       />
-      
-      {/* Speed Indicator */}
       {isRunning && (
           <div className="absolute top-24 left-6 bg-slate-900/60 backdrop-blur-md border border-white/5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-cyan-400 animate-pulse">
-              Engine Speed: {animationSpeed}x
+              Navigating Network...
           </div>
       )}
-
       {hoverData && (
-          <div className="fixed z-50 p-4 bg-slate-900 border border-white/10 rounded-2xl text-white text-xs pointer-events-none" style={{ left: mousePos.x + 20, top: mousePos.y + 20 }}>
+          <div className="fixed z-50 p-4 bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl text-white text-[10px] font-black uppercase tracking-widest pointer-events-none shadow-2xl" style={{ left: mousePos.x + 20, top: mousePos.y + 20 }}>
               {hoverData.data.id}
           </div>
       )}
